@@ -14,6 +14,7 @@ import anthropic
 
 from snow_bot.agents import MODEL, SPECS
 from snow_bot.config import load_env_file, state_dir
+from snow_bot.errors import erklaere
 from snow_bot.state import JsonStore
 
 
@@ -59,8 +60,9 @@ def main() -> int:
     store = JsonStore(state_dir() / "ids.json")
     try:
         sync(anthropic.Anthropic(), store)
-    except anthropic.AuthenticationError:
-        print("Fehler: ANTHROPIC_API_KEY fehlt oder ist ungültig.", file=sys.stderr)
+    except anthropic.APIError as fehler:
+        print(f"Fehler: {erklaere(fehler)}", file=sys.stderr)
+        print("Bereits Angelegtes ist gespeichert, ein erneuter Lauf setzt fort.", file=sys.stderr)
         return 1
     print(f"Gespeichert in {store.path}")
     return 0

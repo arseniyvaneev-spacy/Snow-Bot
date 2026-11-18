@@ -11,6 +11,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 from snow_bot.agents import SPECS
 from snow_bot.config import Config
+from snow_bot.errors import erklaere
 from snow_bot.runner import TurnResult, create_session, run_turn
 from snow_bot.state import JsonStore, SessionStore
 
@@ -133,9 +134,7 @@ class SnowBot:
                 return
             except anthropic.APIError as fehler:
                 log.exception("API-Fehler")
-                await update.message.reply_text(
-                    f"Fehler bei der Claude-API: {type(fehler).__name__}. Versuch es gleich nochmal"
-                )
+                await update.message.reply_text(erklaere(fehler))
                 return
             for teil in split_message(describe(result, self.config.session_budget_cents)):
                 await update.message.reply_text(
