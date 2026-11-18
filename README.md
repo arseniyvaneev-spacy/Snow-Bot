@@ -19,19 +19,32 @@ Telegram-Bot für **Snow AI** (Recherche) und **Agent Teacher** (Lernen), betrie
 1. Bot anlegen: In Telegram mit **@BotFather** sprechen, `/newbot`, Token notieren.
 2. Eigene User-ID herausfinden, z. B. mit **@userinfobot**.
 3. API-Key auf https://platform.claude.com anlegen.
-4. Installieren:
+4. Installieren – **Windows (PowerShell)**:
+
+```powershell
+git clone https://github.com/arseniyvaneev-spacy/Snow-Bot.git
+cd Snow-Bot
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+copy .env.example .env
+notepad .env
+```
+
+   Meldet PowerShell beim Aktivieren „Ausführen von Skripts ist deaktiviert“, einmalig `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` ausführen.
+
+   **macOS/Linux:**
 
 ```bash
-# mit uv
-uv venv && uv pip install -e ".[dev]"
-
-# ohne uv
+git clone https://github.com/arseniyvaneev-spacy/Snow-Bot.git
+cd Snow-Bot
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+cp .env.example .env    # dann .env ausfüllen
 ```
 
-5. `.env.example` nach `.env` kopieren und ausfüllen, dann laden: `set -a; source .env; set +a`
+5. In `.env` die drei Pflichtwerte eintragen: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_ID`, `ANTHROPIC_API_KEY`. Die Programme lesen die Datei selbst – sie muss nur im Ordner liegen, aus dem du sie startest (dem Projektordner). Ein im Terminal gesetzter Wert hat Vorrang vor der Datei.
 6. Agenten anlegen (einmalig, und erneut nach jeder Prompt-Änderung):
 
 ```bash
@@ -40,11 +53,13 @@ snow-bot-setup
 
 ## Start
 
+Im Projektordner, mit aktivierter `.venv`:
+
 ```bash
 snow-bot        # oder: python -m snow_bot
 ```
 
-Der Bot nutzt Long Polling, braucht also keine öffentliche Adresse. Er muss aber laufen, solange du ihn nutzen willst (eigener Rechner, Raspberry Pi oder kleiner Server).
+Beenden mit `Strg+C`. Der Bot nutzt Long Polling, braucht also keine öffentliche Adresse. Er muss aber laufen, solange du ihn nutzen willst (eigener Rechner, Raspberry Pi oder kleiner Server).
 
 ## Befehle
 

@@ -4,6 +4,21 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+
+def load_env_file(path: Path | None = None) -> bool:
+    """Lädt `.env` aus dem aktuellen Ordner, falls vorhanden.
+
+    Bereits gesetzte Umgebungsvariablen gewinnen (override=False), damit man einzelne
+    Werte im Terminal überschreiben kann. `interpolate=False`, damit ein `$` in einem
+    Token nicht als Variable ausgewertet wird. Gibt zurück, ob eine Datei gelesen wurde.
+    """
+    datei = path or Path.cwd() / ".env"
+    if not datei.is_file():
+        return False
+    return load_dotenv(datei, override=False, interpolate=False)
+
 
 class ConfigError(RuntimeError):
     """Eine Pflichtvariable fehlt oder ist ungültig."""
@@ -20,7 +35,7 @@ class Config:
 def _pflicht(name: str) -> str:
     wert = os.environ.get(name, "").strip()
     if not wert:
-        raise ConfigError(f"Umgebungsvariable {name} fehlt (siehe .env.example).")
+        raise ConfigError(f"{name} fehlt – in .env eintragen (Vorlage: .env.example).")
     return wert
 
 
@@ -30,6 +45,7 @@ def state_dir() -> Path:
 
 
 def load() -> Config:
+    load_env_file()
     user_id = _pflicht("TELEGRAM_ALLOWED_USER_ID")
     if not user_id.isdigit():
         raise ConfigError("TELEGRAM_ALLOWED_USER_ID muss eine Zahl sein (deine Telegram-User-ID).")
