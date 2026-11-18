@@ -7,12 +7,13 @@ einen Prompt geändert hast: Der Agent bekommt dann eine neue Version, statt neu
 angelegt zu werden.
 """
 
+import os
 import sys
 
 import anthropic
 
 from snow_bot.agents import MODEL, SPECS
-from snow_bot.config import state_dir
+from snow_bot.config import load_env_file, state_dir
 from snow_bot.state import JsonStore
 
 
@@ -51,6 +52,10 @@ def sync(client: anthropic.Anthropic, store: JsonStore) -> dict:
 
 
 def main() -> int:
+    load_env_file()
+    if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        print("Fehler: ANTHROPIC_API_KEY fehlt (in .env eintragen).", file=sys.stderr)
+        return 1
     store = JsonStore(state_dir() / "ids.json")
     try:
         sync(anthropic.Anthropic(), store)
