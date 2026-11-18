@@ -221,3 +221,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# snow-bot: lokale IDs und Sessions der Agenten
+state/
