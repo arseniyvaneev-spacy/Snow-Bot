@@ -3,7 +3,7 @@
 import logging
 import sys
 
-from snow_bot.bot import SnowBot
+from snow_bot.bot import POLL_TIMEOUT, SnowBot
 from snow_bot.config import ConfigError, load
 
 
@@ -17,7 +17,9 @@ def main() -> int:
     except (ConfigError, RuntimeError) as fehler:
         print(f"Fehler: {fehler}", file=sys.stderr)
         return 1
-    bot.build().run_polling()
+    # bootstrap_retries=-1: Ist Telegram beim Start kurz nicht erreichbar, endlos neu
+    # versuchen statt abstürzen. Netzfehler im laufenden Betrieb fängt run_polling selbst ab.
+    bot.build().run_polling(timeout=POLL_TIMEOUT, bootstrap_retries=-1)
     return 0
 
 
