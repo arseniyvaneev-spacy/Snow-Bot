@@ -133,3 +133,44 @@ def test_describe_free():
     assert "GitHub Models" in describe_free(FreeAnswer("T", "GitHub Models", "m"))
     t = describe_free(a, fallback_grund="Kein Guthaben.")
     assert "Kein Guthaben." in t and "ohne Websuche" in t
+
+
+FERTIG = {"agent_id": "a", "agent_version": 1, "environment_id": "e"}
+
+
+def _bot(tmp_path, ids: dict, providers=(CEREBRAS,)):
+    from snow_bot.bot import SnowBot
+    from snow_bot.config import Config
+
+    JsonStore(tmp_path / "ids.json").save(ids)
+    config = Config("t", 1, tmp_path, "200", tuple(providers))
+    return SnowBot(config, client=None)
+
+
+def test_bot_startet_ohne_claude_agenten_im_gratis_modus(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    bot = _bot(tmp_path, {"snow": {"environment_id": "env_1"}})
+    assert bot.ready == set()
+    assert bot.active(42) == "free"  # gewählt ist snow, aber nicht eingerichtet
+
+
+def test_bot_ohne_agenten_und_ohne_gratis_bricht_ab(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    with pytest.raises(RuntimeError, match="snow-bot-setup"):
+        _bot(tmp_path, {}, providers=())
+
+
+def test_bot_mit_agenten_nutzt_claude(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    ids = {k: FERTIG for k in ("snow", "teacher")}
+    bot = _bot(tmp_path, ids)
+    assert bot.ready == {"snow", "teacher"}
+    assert bot.active(42) == "snow"
+
+
+def test_bot_ohne_anthropic_key_nur_gratis(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    ids = {k: FERTIG for k in ("snow", "teacher")}
+    bot = _bot(tmp_path, ids)
+    assert bot.ready == set() and bot.client is None
+    assert bot.active(42) == "free"

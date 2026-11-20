@@ -14,6 +14,7 @@ Telegram-Bot für **Snow AI** (Recherche) und **Agent Teacher** (Lernen), betrie
 - Jede Unterhaltung hat eine harte Kostenobergrenze (`SESSION_BUDGET_CENTS`, Standard $2). Ist sie erreicht, startet `/neu` eine neue.
 - Nur die User-ID in `TELEGRAM_ALLOWED_USER_ID` bekommt Antworten. Alle anderen werden ignoriert.
 - **Snow Free** (`/free`, optional): kostenloser Chat über Cerebras, bei Ausfall über GitHub Models. Keine Websuche, der Verlauf (letzte 20 Nachrichten) liegt lokal in `state/free_history.json`.
+- **Ohne Claude-Setup lauffähig:** Sind Gratis-Keys eingetragen, startet der Bot auch dann, wenn `snow-bot-setup` (noch) nicht geklappt hat oder `ANTHROPIC_API_KEY` fehlt – dann antwortet Snow Free, bis die Claude-Agenten eingerichtet sind.
 - **Automatischer Ersatz:** Ist Claude nicht nutzbar (kein Guthaben, Ausgabenlimit, Rate-Limit, Störung, ungültiger Key), antwortet bei Snow AI und Agent Teacher automatisch Snow Free – mit Hinweis unter der Antwort.
 
 ## Einrichtung

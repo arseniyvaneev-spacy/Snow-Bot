@@ -77,12 +77,14 @@ def load() -> Config:
         raise ConfigError(
             "SESSION_BUDGET_CENTS muss eine positive ganze Zahl sein, z. B. 200 = $2."
         )
-    # ANTHROPIC_API_KEY liest das Anthropic-SDK selbst.
-    _pflicht("ANTHROPIC_API_KEY")
+    # ANTHROPIC_API_KEY liest das Anthropic-SDK selbst. Mit Gratis-Modus ist er optional.
+    gratis = free_providers()
+    if not gratis:
+        _pflicht("ANTHROPIC_API_KEY")
     return Config(
         telegram_token=_pflicht("TELEGRAM_BOT_TOKEN"),
         allowed_user_id=int(user_id),
         state_dir=state_dir(),
         session_budget_cents=budget,
-        free_providers=free_providers(),
+        free_providers=gratis,
     )
