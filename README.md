@@ -62,7 +62,7 @@ Im Projektordner, mit aktivierter `.venv`:
 snow-bot        # oder: python -m snow_bot
 ```
 
-Beenden mit `Strg+C`. Der Bot nutzt Long Polling, braucht also keine öffentliche Adresse. Er muss aber laufen, solange du ihn nutzen willst (eigener Rechner, Raspberry Pi oder kleiner Server).
+Beenden mit `Strg+C`. Ist Telegram beim Start oder später kurz nicht erreichbar, versucht der Bot es von selbst weiter – Warnungen wie `Timed out` im Fenster sind dann kein Grund zum Neustart. Der Bot nutzt Long Polling, braucht also keine öffentliche Adresse. Er muss aber laufen, solange du ihn nutzen willst (eigener Rechner, Raspberry Pi oder kleiner Server).
 
 ## Befehle
 

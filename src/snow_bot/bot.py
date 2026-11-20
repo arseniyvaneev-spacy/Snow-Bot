@@ -20,6 +20,7 @@ from snow_bot.state import JsonStore, SessionStore
 log = logging.getLogger(__name__)
 
 TELEGRAM_LIMIT = 4096
+POLL_TIMEOUT = 25  # Sekunden, die Telegram eine Long-Polling-Anfrage offen hält
 NAMES = {"snow": "Snow AI", "teacher": "Agent Teacher", "free": "Snow Free"}
 
 HILFE = (
@@ -108,7 +109,18 @@ class SnowBot:
         self.locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     def build(self) -> Application:
-        app = Application.builder().token(self.config.telegram_token).build()
+        # Großzügige Wartezeiten: Bei langsamem Netz lieber warten als abbrechen.
+        app = (
+            Application.builder()
+            .token(self.config.telegram_token)
+            .connect_timeout(20)
+            .read_timeout(30)
+            .write_timeout(30)
+            .pool_timeout(10)
+            .get_updates_connect_timeout(20)
+            .get_updates_read_timeout(40)  # muss länger sein als POLL_TIMEOUT
+            .build()
+        )
         nur_ich = filters.User(user_id=self.config.allowed_user_id)
         app.add_handler(CommandHandler(["start", "hilfe"], self.cmd_start, filters=nur_ich))
         app.add_handler(CommandHandler("snow", self.cmd_switch, filters=nur_ich))

@@ -25,3 +25,16 @@ def test_budget_hinweis():
 
 def test_leere_antwort():
     assert describe(TurnResult(), "200") == "(Keine Antwort erhalten.)"
+
+
+def test_build_mit_wartezeiten(tmp_path, monkeypatch):
+    from snow_bot.bot import POLL_TIMEOUT, SnowBot
+    from snow_bot.config import Config
+    from snow_bot.free_llm import Provider
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    provider = Provider("Cerebras", "https://x.test/v1", "k", "m")
+    config = Config("123:abc", 1, tmp_path, "200", (provider,))
+    app = SnowBot(config).build()
+    assert app.bot.request._client.timeout.read == 30  # normale Anfragen
+    assert app.updater.bot._request[0]._client.timeout.read == 40 > POLL_TIMEOUT
