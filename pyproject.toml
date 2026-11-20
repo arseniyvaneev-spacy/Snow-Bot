@@ -1,11 +1,12 @@
 [project]
 name = "snow-bot"
 version = "0.1.0"
-description = "Telegram-Bot für Snow AI und Agent Teacher auf Claude Managed Agents."
+description = "Telegram-Bot für Snow AI und Agent Teacher auf Claude Managed Agents, plus Gratis-Modus."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "anthropic>=2.10",
+    "httpx>=0.27",
     "python-dotenv>=1.0",
     "python-telegram-bot>=22",
 ]

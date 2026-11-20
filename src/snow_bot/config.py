@@ -6,6 +6,17 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from snow_bot.free_llm import Provider
+
+# Anbieter für den Gratis-Modus, in dieser Reihenfolge probiert:
+# (Anzeigename, Key-Variable, Modell-Variable, Standardmodell, Basis-URL)
+FREE_PROVIDERS = [
+    ("Cerebras", "CEREBRAS_API_KEY", "CEREBRAS_MODEL", "gpt-oss-120b",
+     "https://api.cerebras.ai/v1"),
+    ("GitHub Models", "GITHUB_MODELS_TOKEN", "GITHUB_MODELS_MODEL", "openai/gpt-4.1-mini",
+     "https://models.github.ai/inference"),
+]
+
 
 def load_env_file(path: Path | None = None) -> bool:
     """Lädt `.env` aus dem aktuellen Ordner, falls vorhanden.
@@ -30,6 +41,7 @@ class Config:
     allowed_user_id: int
     state_dir: Path
     session_budget_cents: str
+    free_providers: tuple[Provider, ...] = ()
 
 
 def _pflicht(name: str) -> str:
@@ -37,6 +49,17 @@ def _pflicht(name: str) -> str:
     if not wert:
         raise ConfigError(f"{name} fehlt – in .env eintragen (Vorlage: .env.example).")
     return wert
+
+
+def free_providers() -> tuple[Provider, ...]:
+    """Alle Gratis-Anbieter, für die ein Key gesetzt ist. Keiner ist Pflicht."""
+    gefunden = []
+    for name, key_var, model_var, standard, url in FREE_PROVIDERS:
+        key = os.environ.get(key_var, "").strip()
+        if key:
+            model = os.environ.get(model_var, "").strip() or standard
+            gefunden.append(Provider(name=name, base_url=url, api_key=key, model=model))
+    return tuple(gefunden)
 
 
 def state_dir() -> Path:
@@ -61,4 +84,5 @@ def load() -> Config:
         allowed_user_id=int(user_id),
         state_dir=state_dir(),
         session_budget_cents=budget,
+        free_providers=free_providers(),
     )
