@@ -13,6 +13,9 @@ Telegram-Bot für **Snow AI** (Recherche) und **Agent Teacher** (Lernen), betrie
   - Agent Teacher: nur offizielle Claude- und Anthropic-Doku.
 - Jede Unterhaltung hat eine harte Kostenobergrenze (`SESSION_BUDGET_CENTS`, Standard $2). Ist sie erreicht, startet `/neu` eine neue.
 - Nur die User-ID in `TELEGRAM_ALLOWED_USER_ID` bekommt Antworten. Alle anderen werden ignoriert.
+- **Snow Free** (`/free`, optional): kostenloser Chat über Cerebras, bei Ausfall über GitHub Models. Keine Websuche, der Verlauf (letzte 20 Nachrichten) liegt lokal in `state/free_history.json`.
+- **Ohne Claude-Setup lauffähig:** Sind Gratis-Keys eingetragen, startet der Bot auch dann, wenn `snow-bot-setup` (noch) nicht geklappt hat oder `ANTHROPIC_API_KEY` fehlt – dann antwortet Snow Free, bis die Claude-Agenten eingerichtet sind.
+- **Automatischer Ersatz:** Ist Claude nicht nutzbar (kein Guthaben, Ausgabenlimit, Rate-Limit, Störung, ungültiger Key), antwortet bei Snow AI und Agent Teacher automatisch Snow Free – mit Hinweis unter der Antwort.
 
 ## Einrichtung
 
@@ -67,8 +70,9 @@ Beenden mit `Strg+C`. Der Bot nutzt Long Polling, braucht also keine öffentlich
 |---|---|
 | `/snow` | Snow AI aktiv schalten |
 | `/teacher` | Agent Teacher aktiv schalten |
+| `/free` | Snow Free aktiv schalten (gratis, ohne Websuche) |
 | `/neu` | Neue Unterhaltung mit dem aktiven Agenten |
-| `/status` | Zeigt den aktiven Agenten |
+| `/status` | Zeigt den aktiven Agenten und die Gratis-Modelle |
 
 ## Umgebungsvariablen
 
@@ -79,6 +83,12 @@ Beenden mit `Strg+C`. Der Bot nutzt Long Polling, braucht also keine öffentlich
 | `ANTHROPIC_API_KEY` | ja | Anthropic-API-Key |
 | `SESSION_BUDGET_CENTS` | nein | Kostenobergrenze pro Unterhaltung in US-Cent (Standard 200) |
 | `SNOW_BOT_STATE_DIR` | nein | Ordner für IDs und Sessions (Standard `./state`) |
+| `CEREBRAS_API_KEY` | nein | Key für Snow Free (erste Wahl) |
+| `CEREBRAS_MODEL` | nein | Standard `gpt-oss-120b` |
+| `GITHUB_MODELS_TOKEN` | nein | GitHub-Token mit „Models: read“ (Ersatz für Cerebras) |
+| `GITHUB_MODELS_MODEL` | nein | Standard `openai/gpt-4.1-mini` |
+
+Keys gehören **nur** in die lokale `.env` (steht in `.gitignore`), nie in den Code – das Repo ist öffentlich.
 
 ## Prompts ändern
 

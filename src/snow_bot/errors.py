@@ -26,3 +26,24 @@ def erklaere(fehler: anthropic.APIError) -> str:
     anfrage = getattr(fehler, "request_id", None)
     zusatz = f" (Request-ID {anfrage})" if anfrage else ""
     return f"Fehler bei der Claude-API: {type(fehler).__name__}{zusatz}."
+
+
+def fallback_sinnvoll(fehler: anthropic.APIError) -> bool:
+    """Ob ein Gratis-Modell einspringen soll: Claude ist gerade nicht nutzbar,
+    die Anfrage selbst war aber in Ordnung."""
+    if isinstance(fehler, anthropic.OrganizationOnHoldError):
+        return True
+    if isinstance(fehler, anthropic.BadRequestError):
+        text = str(getattr(fehler, "message", "") or fehler)
+        return "credit balance" in text.lower()
+    return isinstance(
+        fehler,
+        (
+            anthropic.AuthenticationError,
+            anthropic.PermissionDeniedError,
+            anthropic.PaymentRequiredError,  # u. a. Ausgabenlimit erreicht
+            anthropic.RateLimitError,
+            anthropic.APIConnectionError,
+            anthropic.InternalServerError,
+        ),
+    )

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from collections import defaultdict
 
 import anthropic
@@ -11,19 +12,21 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 from snow_bot.agents import SPECS
 from snow_bot.config import Config
-from snow_bot.errors import erklaere
+from snow_bot.errors import erklaere, fallback_sinnvoll
+from snow_bot.free_llm import FreeAnswer, FreeChat, FreeLLMError
 from snow_bot.runner import TurnResult, create_session, run_turn
 from snow_bot.state import JsonStore, SessionStore
 
 log = logging.getLogger(__name__)
 
 TELEGRAM_LIMIT = 4096
-NAMES = {"snow": "Snow AI", "teacher": "Agent Teacher"}
+NAMES = {"snow": "Snow AI", "teacher": "Agent Teacher", "free": "Snow Free"}
 
 HILFE = (
     "Befehle:\n"
     "/snow – mit Snow AI sprechen (Recherche)\n"
     "/teacher – mit Agent Teacher sprechen (Lernen)\n"
+    "/free – kostenloser Chat ohne Websuche (Cerebras/GitHub)\n"
     "/neu – neue Unterhaltung mit dem aktiven Agenten\n"
     "/status – welcher Agent gerade aktiv ist"
 )
@@ -46,6 +49,19 @@ def split_message(text: str, limit: int = TELEGRAM_LIMIT) -> list[str]:
     return teile
 
 
+def describe_free(antwort: FreeAnswer, fallback_grund: str | None = None) -> str:
+    text = antwort.text
+    quelle = f"{antwort.provider}, {antwort.model}"
+    if fallback_grund:
+        text += (
+            f"\n\n(Claude nicht erreichbar: {fallback_grund} "
+            f"Antwort von {quelle}, ohne Websuche.)"
+        )
+    elif antwort.provider != "Cerebras":
+        text += f"\n\n(Antwort von {quelle}.)"
+    return text
+
+
 def describe(result: TurnResult, budget_cents: str) -> str:
     text = result.text
     if result.stop == "budget_reached":
@@ -61,14 +77,33 @@ def describe(result: TurnResult, budget_cents: str) -> str:
 
 
 class SnowBot:
-    def __init__(self, config: Config, client: anthropic.Anthropic | None = None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        client: anthropic.Anthropic | None = None,
+        free: FreeChat | None = None,
+    ) -> None:
         self.config = config
-        self.client = client or anthropic.Anthropic()
+        self.free = free or FreeChat(
+            list(config.free_providers), JsonStore(config.state_dir / "free_history.json")
+        )
         self.ids = JsonStore(config.state_dir / "ids.json").load()
-        missing = [k for k in SPECS if "agent_id" not in self.ids.get(k, {})]
-        if missing:
-            fehlend = ", ".join(missing)
-            raise RuntimeError(f"Agenten fehlen ({fehlend}). Erst snow-bot-setup ausführen.")
+        # Claude-Agenten, die snow-bot-setup fertig angelegt hat.
+        self.ready = {k for k in SPECS if "agent_id" in self.ids.get(k, {})}
+        if client is None and not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            self.ready = set()  # ohne Key kein Claude
+        fehlend = [k for k in SPECS if k not in self.ready]
+        if fehlend and not self.free.available:
+            raise RuntimeError(
+                f"Agenten fehlen ({', '.join(fehlend)}). Erst snow-bot-setup ausführen "
+                "oder CEREBRAS_API_KEY / GITHUB_MODELS_TOKEN für den Gratis-Modus eintragen."
+            )
+        if fehlend:
+            log.warning(
+                "Claude-Agenten fehlen (%s) – bis snow-bot-setup klappt, antwortet Snow Free.",
+                ", ".join(fehlend),
+            )
+        self.client = client or (anthropic.Anthropic() if self.ready else None)
         self.sessions = SessionStore(JsonStore(config.state_dir / "sessions.json"))
         self.locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
@@ -78,34 +113,65 @@ class SnowBot:
         app.add_handler(CommandHandler(["start", "hilfe"], self.cmd_start, filters=nur_ich))
         app.add_handler(CommandHandler("snow", self.cmd_switch, filters=nur_ich))
         app.add_handler(CommandHandler("teacher", self.cmd_switch, filters=nur_ich))
+        app.add_handler(CommandHandler("free", self.cmd_switch, filters=nur_ich))
         app.add_handler(CommandHandler("neu", self.cmd_new, filters=nur_ich))
         app.add_handler(CommandHandler("status", self.cmd_status, filters=nur_ich))
         app.add_handler(MessageHandler(nur_ich & filters.TEXT & ~filters.COMMAND, self.on_text))
         # Alle anderen Nutzer bekommen keine Antwort – der Bot verrät nicht einmal, dass er lebt.
         return app
 
+    def active(self, chat: int) -> str:
+        """Gewählter Agent – oder Snow Free, wenn der gewählte nicht eingerichtet ist."""
+        key = self.sessions.active_agent(chat)
+        if key in SPECS and key not in self.ready and self.free.available:
+            return "free"
+        return key
+
     async def cmd_start(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-        aktiv = NAMES[self.sessions.active_agent(update.effective_chat.id)]
+        aktiv = NAMES[self.active(update.effective_chat.id)]
         await update.message.reply_text(f"Hallo Snow. Aktiv: {aktiv}.\n\n{HILFE}")
 
     async def cmd_switch(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         key = update.message.text.lstrip("/").split("@")[0].split()[0]
+        if key == "free" and not self.free.available:
+            await update.message.reply_text(
+                "Snow Free ist nicht eingerichtet: CEREBRAS_API_KEY oder GITHUB_MODELS_TOKEN "
+                "in .env eintragen und den Bot neu starten."
+            )
+            return
+        if key in SPECS and key not in self.ready:
+            await update.message.reply_text(
+                f"{NAMES[key]} ist noch nicht eingerichtet: snow-bot-setup ausführen "
+                "(braucht Guthaben auf dem Anthropic-API-Konto). Bis dahin antwortet Snow Free."
+            )
+            return
         self.sessions.set_active(update.effective_chat.id, key)
         await update.message.reply_text(f"{NAMES[key]} ist jetzt aktiv.")
 
     async def cmd_new(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         chat = update.effective_chat.id
-        key = self.sessions.active_agent(chat)
-        self.sessions.forget_session(chat, key)
+        key = self.active(chat)
+        if key == "free":
+            self.free.reset(chat)
+        else:
+            self.sessions.forget_session(chat, key)
         await update.message.reply_text(
             f"Neue Unterhaltung mit {NAMES[key]} beginnt mit deiner nächsten Nachricht."
         )
 
     async def cmd_status(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         chat = update.effective_chat.id
-        key = self.sessions.active_agent(chat)
-        laeuft = "läuft" if self.sessions.session_id(chat, key) else "noch keine"
-        await update.message.reply_text(f"Aktiv: {NAMES[key]} (Unterhaltung: {laeuft}).")
+        key = self.active(chat)
+        if key == "free":
+            laeuft = "läuft" if self.free.history(chat) else "noch keine"
+        else:
+            laeuft = "läuft" if self.sessions.session_id(chat, key) else "noch keine"
+        gratis = self.free.describe()
+        claude = ", ".join(NAMES[k] for k in SPECS if k in self.ready) or "keine (Setup fehlt)"
+        await update.message.reply_text(
+            f"Aktiv: {NAMES[key]} (Unterhaltung: {laeuft}).\n"
+            f"Claude-Agenten: {claude}\nGratis-Modelle: {gratis}"
+        )
 
     def _turn(self, chat: int, key: str, text: str) -> TurnResult:
         session_id = self.sessions.session_id(chat, key)
@@ -119,11 +185,32 @@ class SnowBot:
             self.sessions.set_session(chat, key, session_id)
         return run_turn(self.client, session_id, text)
 
+    async def _reply(self, update: Update, text: str) -> None:
+        for teil in split_message(text):
+            await update.message.reply_text(
+                teil, link_preview_options=LinkPreviewOptions(is_disabled=True)
+            )
+
+    async def _free_turn(self, update: Update, fallback_grund: str | None = None) -> None:
+        chat = update.effective_chat.id
+        try:
+            antwort = await asyncio.to_thread(self.free.chat, chat, update.message.text)
+        except FreeLLMError as fehler:
+            text = str(fehler)
+            if fallback_grund:
+                text = f"{fallback_grund}\n\nAuch der Gratis-Ersatz klappte nicht: {text}"
+            await update.message.reply_text(text)
+            return
+        await self._reply(update, describe_free(antwort, fallback_grund))
+
     async def on_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat = update.effective_chat.id
         async with self.locks[chat]:  # eine Anfrage pro Chat zur Zeit
-            key = self.sessions.active_agent(chat)
+            key = self.active(chat)
             await context.bot.send_chat_action(chat, ChatAction.TYPING)
+            if key == "free":
+                await self._free_turn(update)
+                return
             try:
                 result = await asyncio.to_thread(self._turn, chat, key, update.message.text)
             except anthropic.NotFoundError:
@@ -134,9 +221,9 @@ class SnowBot:
                 return
             except anthropic.APIError as fehler:
                 log.exception("API-Fehler")
-                await update.message.reply_text(erklaere(fehler))
+                if self.free.available and fallback_sinnvoll(fehler):
+                    await self._free_turn(update, fallback_grund=erklaere(fehler))
+                else:
+                    await update.message.reply_text(erklaere(fehler))
                 return
-            for teil in split_message(describe(result, self.config.session_budget_cents)):
-                await update.message.reply_text(
-                    teil, link_preview_options=LinkPreviewOptions(is_disabled=True)
-                )
+            await self._reply(update, describe(result, self.config.session_budget_cents))
